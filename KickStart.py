@@ -27,12 +27,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--machine", help="Machine name")
     parser.add_argument("-i", "--ip", help="IP address")
-    parser.add_argument("-n", "--nmap", help=f"Use Nmap for scanning {italic}(Rustscan is used by default, which is faster, and designed for CTFs){rst}", action="store_true")
+    parser.add_argument("-n", "--nmap", help=f"Use Nmap for scanning (Rustscan is used by default, which is faster, and designed for CTFs)", action="store_true")
     parser.add_argument("-a", "--auto", help="Automatically give default answers to all prompts", action="store_true")
-    parser.add_argument("-s", "--seclists", type=str, help=f"Path to SecLists directory {italic}(default: /usr/share/seclists){rst}", default="/usr/share/seclists")
-    parser.add_argument("-dw", "--directory-wordlist", type=str, help=f"Path to directory wordlist {italic}(default: /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt){rst}")
-    parser.add_argument("-sw", "--subdomain-wordlist", type=str, help=f"Path to subdomain wordlist {italic}(default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt){rst}", default="/usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt")
-    parser.add_argument("--no-ping", help=f"Skip pinging the machine to check if it is online {italic}(for testing purposes){rst}", action="store_true")
+    parser.add_argument("-s", "--seclists", type=str, help=f"Path to SecLists directory (default: /usr/share/seclists)", default="/usr/share/seclists")
+    parser.add_argument("-dw", "--dir-wordlist", type=str, help=f"Path to directory wordlist (default: /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt)")
+    parser.add_argument("-sw", "--sub-wordlist", type=str, help=f"Path to subdomain wordlist (default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt)", default="/usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt")
+    parser.add_argument("--no-ping", help=f"Skip pinging the machine to check if it is online (for testing purposes)", action="store_true")
     args = parser.parse_args()
 
     # Check if machine and ip arguments are provided
