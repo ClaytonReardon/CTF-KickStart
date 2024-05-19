@@ -15,4 +15,16 @@ By default, directory busting uses the [raft-medium-directories.txt](https://git
 
 ### Usage
 ```
+usage: KickStart.py [-h] [-m MACHINE] [-i IP] [-n] [-a] [-s SECLISTS] [-dw DIRECTORY_WORDLIST] [-sw SUBDOMAIN_WORDLIST] [--no-ping]
+
+options:
+  -h, --help                                show this help message and exit
+  -m MACHINE, --machine MACHINE             Machine name
+  -i IP, --ip IP                            IP address
+  -n, --nmap                                Use Nmap for scanning (Rustscan is used by default, which is faster, and designed for CTFs)
+  -a, --auto                                Automatically give default answers to all prompts
+  -s SECLISTS, --seclists SECLISTS          Path to SecLists directory (default: /usr/share/seclists)
+  -dw WORDLIST, --dir-wordlist WORDLIST     Path to directory wordlist (default: /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt)
+  -sw WORDLIST, --sub-wordlist WORDLIST     Path to subdomain wordlist (default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt)
+  --no-ping                                 Skip pinging the machine to check if it is online (for testing purposes)
 ```
