@@ -29,6 +29,9 @@ def main():
     parser.add_argument("-i", "--ip", help="IP address")
     parser.add_argument("-n", "--nmap", help=f"Use Nmap for scanning {italic}(Rustscan is used by default, which is faster, and designed for CTFs){rst}", action="store_true")
     parser.add_argument("-a", "--auto", help="Automatically give default answers to all prompts", action="store_true")
+    parser.add_argument("-s", "--seclists", type=str, help=f"Path to SecLists directory {italic}(default: /usr/share/seclists){rst}", default="/usr/share/seclists")
+    parser.add_argument("-dw", "--directory-wordlist", type=str, help=f"Path to directory wordlist {italic}(default: /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt){rst}")
+    parser.add_argument("-sw", "--subdomain-wordlist", type=str, help=f"Path to subdomain wordlist {italic}(default: /usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt){rst}", default="/usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt")
     parser.add_argument("--no-ping", help=f"Skip pinging the machine to check if it is online {italic}(for testing purposes){rst}", action="store_true")
     args = parser.parse_args()
 
@@ -42,6 +45,11 @@ def main():
     machine = args.machine
     ip = args.ip
     auto = args.auto
+    seclists_dir = args.seclists
+    if args.directory_wordlist:
+        dir_wordlist = args.directory_wordlist
+    if args.subdomain_wordlist:
+        sub_wordlist = args.subdomain_wordlist
 
     # Create directory structure and note files
     os.makedirs(f"{machine}/notes", exist_ok=True)
@@ -51,16 +59,19 @@ def main():
     open(f"{machine}/notes/portscan.md", "w").close()
 
     # Send pings to check if machine is online
-    print(f"{grn}Pinging {bldgrn}{ip}{grn} to check if machine is online...")
-    print(f"{grn}Pings Received: ", end='', flush=True)
-    ping_count = 0
-    while ping_count < 10:
-        response = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if "1 packets transmitted, 1 received" in response.stdout.decode():
-            ping_count += 1
-            print(f"{bldgrn}{ping_count} ", end='', flush=True)
-        time.sleep(1)
-    print()
+    if not args.no_ping:
+        print(f"{grn}Pinging {bldgrn}{ip}{grn} to check if machine is online...")
+        print(f"{grn}Pings Received: ", end='', flush=True)
+        ping_count = 0
+        while ping_count < 10:
+            response = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if "1 packets transmitted, 1 received" in response.stdout.decode():
+                ping_count += 1
+                print(f"{bldgrn}{ping_count} ", end='', flush=True)
+            time.sleep(1)
+        print()
+    else:
+        print(f"{grn}Skipping ping check...")
 
     # Run Nmap or RustScan depending on the --nmap argument
     if args.nmap:
@@ -90,7 +101,7 @@ def main():
                 print(f"{grn}Enter domain name: ")
                 domain = (f"{machine}.htb")
         
-            feroxbuster(http_ports, ip, machine, domain, protocol, port)
+            feroxbuster(http_ports, ip, machine, domain, protocol, port, dir_wordlist)
 
     # Run subdomain scan on any http(s) ports
     for port, protocol in http_ports:
@@ -100,7 +111,16 @@ def main():
             print(f"\n{grn}Run Subdomain scan on {bldgrn}{domain}{grn} port {bldgrn}{port}{grn}? (Y/n): {bldgrn}Y")
             choice = "Y"
         if choice.lower() == "y":
-            vhost_scan(http_ports, ip, machine, domain, protocol, port, auto)
+            subdomains = vhost_scan(http_ports, ip, machine, domain, protocol, port, auto, seclists_dir, sub_wordlist)
+            # Send found subdomains to Feroxbuster
+            for subdomain in subdomains:
+                if not auto:
+                    choice = input(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{grn}? (Y/n): ") or "Y"
+                else:
+                    print(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{grn}? (Y/n): {bldgrn}Y")
+                    choice = "Y"
+                if choice.lower() == "y":
+                    feroxbuster(http_ports, ip, machine, subdomain, protocol, port, dir_wordlist)
 
 
 # █▀▄ █ █ █▀▀ ▀█▀ █▀▀ █▀▀ █▀█ █▀█
@@ -152,9 +172,9 @@ def nmap_scan(ip, machine):
 # █▀▄ ▀█▀ █▀▄ █▀▀ █▀▀ ▀█▀ █▀█ █▀▄ █ █   █▀▄ █ █ █▀▀ ▀█▀
 # █ █  █  █▀▄ █▀▀ █    █  █ █ █▀▄  █    █▀▄ █ █ ▀▀█  █ 
 # ▀▀  ▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀  ▀  ▀▀▀ ▀ ▀  ▀    ▀▀  ▀▀▀ ▀▀▀  ▀ 
-def feroxbuster(http_ports, ip, machine, domain, protocol, port):
+def feroxbuster(http_ports, ip, machine, domain, protocol, port, wordlist):
     # Run Feroxbuster on any http(s) ports
-    print(f"\n{grn}Directory Busting on {bldgrn}{domain}{grn}...\n")
+    print(f"\n{grn}Directory Busting on {bldgrn}{domain}{grn}...{rst}\n")
 
     for port, protocol in http_ports:
             # Add domain to /etc/hosts
@@ -162,6 +182,8 @@ def feroxbuster(http_ports, ip, machine, domain, protocol, port):
 
             # Set feroxbuster options
             options = (f"-k -n -o {machine}/notes/{domain}_port-{port}.md")
+            if wordlist:
+                options += f" -w {wordlist}"
 
             # Fuzz for different extensions & add to Feroxbuster options
             extensions = ['html', 'php', 'asp', 'aspx']
@@ -181,12 +203,14 @@ def feroxbuster(http_ports, ip, machine, domain, protocol, port):
 #  █▀▀ █ █ █▀▄ █▀▄ █▀█ █▄█ █▀█ ▀█▀ █▀█   █▀▀ █▀▀ █▀█ █▀█
 #  ▀▀█ █ █ █▀▄ █ █ █ █ █ █ █▀█  █  █ █   ▀▀█ █   █▀█ █ █
 #  ▀▀▀ ▀▀▀ ▀▀  ▀▀  ▀▀▀ ▀ ▀ ▀ ▀ ▀▀▀ ▀ ▀   ▀▀▀ ▀▀▀ ▀ ▀ ▀ ▀
-def vhost_scan(http_ports, ip, machine, domain, protocol, port, auto):
+def vhost_scan(http_ports, ip, machine, domain, protocol, port, auto, seclists_dir, wordlist):
     # Scan for subdomains using Gobuster
-    print(f"\n{grn}Scanning Subdomains on {bldgrn}{domain}{grn}...\n")
+    print(f"\n{grn}Scanning Subdomains on {bldgrn}{domain}{grn}...{rst}\n")
     
     for port, protocol in http_ports:
-        wordlist = "/usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt"
+        if wordlist is None:
+            wordlist = f"{seclists_dir}/Discovery/DNS/subdomains-top1million-20000.txt"
+        
         options = "--append-domain --random-agent -k --threads 40 --no-color"
         subprocess.run(f"gobuster vhost -u {protocol}://{domain}:{port} -w {wordlist} -o {machine}/notes/subdomains.md {options}", shell=True)
     
@@ -195,15 +219,7 @@ def vhost_scan(http_ports, ip, machine, domain, protocol, port, auto):
         sub_names = file.read()
     subdomains = re.findall(r'\b\w+\.\w+\.\w+\b', sub_names)
     
-    # Send found subdomains to Feroxbuster
-    for subdomain in subdomains:
-        if not auto:
-            choice = input(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{grn}? (Y/n): ") or "Y"
-        else:
-            print(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{grn}? (Y/n): {bldgrn}Y")
-            choice = "Y"
-        if choice.lower() == "y":
-            feroxbuster(http_ports, ip, machine, subdomain, protocol, port)
+    return subdomains
     
 if __name__ == "__main__":
     main()
