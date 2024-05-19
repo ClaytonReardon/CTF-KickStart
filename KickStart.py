@@ -4,18 +4,18 @@
 # This script will run RustScan or Nmap to scan all ports, then run service and version enumeration on open ports
 # It will then run Feroxbuster on any http(s) ports, as well as any subdomains found using Gobuster
 #
-
 import os
 import re
 import argparse
 import subprocess
 import requests
+import time
 
-# Set color codes
-grn = "\033[3;32m"
-bldgrn = "\033[1;32m"
-orng = "\033[3;33m"
-italic = "\033[3m"
+# Set color codes. All colors have reset code at beginning to simplify script
+grn = "\033[0m\033[0;32m"
+bldgrn = "\033[0m\033[1;32m"
+orng = "\033[0m\033[3;33m"
+italic = "\033[0m\033[3m"
 rst = "\033[0m"
 
 
@@ -29,11 +29,12 @@ def main():
     parser.add_argument("-i", "--ip", help="IP address")
     parser.add_argument("-n", "--nmap", help=f"Use Nmap for scanning {italic}(Rustscan is used by default, which is faster, and designed for CTFs){rst}", action="store_true")
     parser.add_argument("-a", "--auto", help="Automatically give default answers to all prompts", action="store_true")
+    parser.add_argument("--no-ping", help=f"Skip pinging the machine to check if it is online {italic}(for testing purposes){rst}", action="store_true")
     args = parser.parse_args()
 
     # Check if machine and ip arguments are provided
     if not args.machine or not args.ip:
-        print(f"{orng}Error: Machine and IP arguments are required{rst}\n")
+        print(f"{orng}Error: Machine and IP arguments are required\n{rst}")
         parser.print_help()
         exit(1)
 
@@ -48,6 +49,18 @@ def main():
     os.makedirs(f"{machine}/notes/Screenshots", exist_ok=True)
     open(f"{machine}/notes/WriteUp.md", "w").close()
     open(f"{machine}/notes/portscan.md", "w").close()
+
+    # Send pings to check if machine is online
+    print(f"{grn}Pinging {bldgrn}{ip}{grn} to check if machine is online...")
+    print(f"{grn}Pings Received: ", end='', flush=True)
+    ping_count = 0
+    while ping_count < 10:
+        response = subprocess.run(["ping", "-c", "1", ip], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if "1 packets transmitted, 1 received" in response.stdout.decode():
+            ping_count += 1
+            print(f"{bldgrn}{ping_count} ", end='', flush=True)
+        time.sleep(1)
+    print()
 
     # Run Nmap or RustScan depending on the --nmap argument
     if args.nmap:
@@ -65,20 +78,26 @@ def main():
     # Run Feroxbuster on any http(s) ports
     for port, protocol in http_ports:
         if not auto:
-            choice = input(f"\n{grn}Run Feroxbuster on port {bldgrn}{port}{rst}{grn}? (Y/n): {rst}") or "Y"
+            choice = input(f"\n{grn}Run Feroxbuster on port {bldgrn}{port}{grn}? (Y/n)") or "Y"
         else:
-            print(f"\n{grn}Run Feroxbuster on port {bldgrn}{port}{rst}{grn}? (Y/n): {bldgrn}Y{rst}")
+            print(f"\n{grn}Run Feroxbuster on port {bldgrn}{port}{grn}? (Y/n): {bldgrn}Y")
             choice = "Y"
+        
         if choice.lower() == "y":
-            domain = input(f"{grn}Enter domain name: {bldgrn}{rst}")
+            if not auto:
+                domain = input(f"{grn}Enter domain name ({bldgrn}{machine}.htb{grn}): ") or (f"{machine}.htb")
+            else:
+                print(f"{grn}Enter domain name: ")
+                domain = (f"{machine}.htb")
+        
             feroxbuster(http_ports, ip, machine, domain, protocol, port)
 
     # Run subdomain scan on any http(s) ports
     for port, protocol in http_ports:
         if not auto:
-            choice = input(f"\n{grn}Run Subdomain scan on {bldgrn}{domain}{rst}{grn} port {bldgrn}{port}{rst}{grn}? (Y/n): {rst}") or "Y"
+            choice = input(f"\n{grn}Run Subdomain scan on {bldgrn}{domain}{grn} port {bldgrn}{port}{grn}? (Y/n): ") or "Y"
         else:
-            print(f"\n{grn}Run Subdomain scan on {bldgrn}{domain}{rst}{grn} port {bldgrn}{port}{rst}{grn}? (Y/n): {bldgrn}Y{rst}")
+            print(f"\n{grn}Run Subdomain scan on {bldgrn}{domain}{grn} port {bldgrn}{port}{grn}? (Y/n): {bldgrn}Y")
             choice = "Y"
         if choice.lower() == "y":
             vhost_scan(http_ports, ip, machine, domain, protocol, port, auto)
@@ -89,7 +108,7 @@ def main():
 # ▀ ▀ ▀▀▀ ▀▀▀  ▀  ▀▀▀ ▀▀▀ ▀ ▀ ▀ ▀
 def rust_scan(ip, machine):
     # Run RustScan to scan all ports
-    print(f"\n{grn}Running RustScan on {bldgrn}{ip}{rst}{grn}...{rst}\n")
+    print(f"\n{grn}Running RustScan on {bldgrn}{ip}{grn}...\n")
     
     # set rustscan command
     rustscan = f"sudo docker run -it --rm --name rustscan -v {os.getcwd()}/{machine}/notes:/notes rustscan/rustscan"
@@ -106,7 +125,7 @@ def rust_scan(ip, machine):
 # █ █ █ █ █▀█ █▀▀   ▀▀█ █   █▀█ █ █
 # ▀ ▀ ▀ ▀ ▀ ▀ ▀     ▀▀▀ ▀▀▀ ▀ ▀ ▀ ▀
 def nmap_scan(ip, machine):
-    print(f"\n{grn}Running Nmap on all ports on {bldgrn}{ip}{rst}{grn}...{rst}\n")
+    print(f"\n{grn}Running Nmap on all ports on {bldgrn}{ip}{grn}...\n")
 
     # Run Nmap on all ports
     process = subprocess.Popen(f"sudo nmap -v -p- --min-rate=1000 -T4 {ip}", shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -123,7 +142,7 @@ def nmap_scan(ip, machine):
     rc = process.poll()
 
     # Run Nmap with -sC & -sV on open ports
-    print(f"\n{grn}Running Nmap on open ports on {ip}...{rst}\n")
+    print(f"\n{grn}Running Nmap on open ports on {ip}...\n")
 
     # Extract open ports from all_ports
     open_ports = ",".join(re.findall(r'(\d+)/tcp open', all_ports))
@@ -135,7 +154,7 @@ def nmap_scan(ip, machine):
 # ▀▀  ▀▀▀ ▀ ▀ ▀▀▀ ▀▀▀  ▀  ▀▀▀ ▀ ▀  ▀    ▀▀  ▀▀▀ ▀▀▀  ▀ 
 def feroxbuster(http_ports, ip, machine, domain, protocol, port):
     # Run Feroxbuster on any http(s) ports
-    print(f"\n{grn}Directory Busting on {bldgrn}{domain}{rst}{grn}...{rst}\n")
+    print(f"\n{grn}Directory Busting on {bldgrn}{domain}{grn}...\n")
 
     for port, protocol in http_ports:
             # Add domain to /etc/hosts
@@ -164,7 +183,7 @@ def feroxbuster(http_ports, ip, machine, domain, protocol, port):
 #  ▀▀▀ ▀▀▀ ▀▀  ▀▀  ▀▀▀ ▀ ▀ ▀ ▀ ▀▀▀ ▀ ▀   ▀▀▀ ▀▀▀ ▀ ▀ ▀ ▀
 def vhost_scan(http_ports, ip, machine, domain, protocol, port, auto):
     # Scan for subdomains using Gobuster
-    print(f"\n{grn}Scanning Subdomains on {bldgrn}{domain}{rst}{grn}...{rst}\n")
+    print(f"\n{grn}Scanning Subdomains on {bldgrn}{domain}{grn}...\n")
     
     for port, protocol in http_ports:
         wordlist = "/usr/share/seclists/Discovery/DNS/subdomains-top1million-20000.txt"
@@ -179,9 +198,9 @@ def vhost_scan(http_ports, ip, machine, domain, protocol, port, auto):
     # Send found subdomains to Feroxbuster
     for subdomain in subdomains:
         if not auto:
-            choice = input(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{rst}{grn}? (Y/n): {rst}") or "Y"
+            choice = input(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{grn}? (Y/n): ") or "Y"
         else:
-            print(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{rst}{grn}? (Y/n): {bldgrn}Y{rst}")
+            print(f"\n{grn}Run Feroxbuster on found subdomain {bldgrn}{subdomain}{grn}? (Y/n): {bldgrn}Y")
             choice = "Y"
         if choice.lower() == "y":
             feroxbuster(http_ports, ip, machine, subdomain, protocol, port)
